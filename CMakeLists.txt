@@ -14,10 +14,12 @@ project("torch_example" VERSION 0.0.1 LANGUAGES CXX)
 
 find_package(Threads REQUIRED)
 find_package(Torch REQUIRED)
+find_package(OpenCV REQUIRED)
 
 set(PROJECT_INCLUDES 
     ${CMAKE_CURRENT_SOURCE_DIR}/**/*.h
     ${TORCH_INCLUDE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
 )
 file(GLOB_RECURSE PROJECT_SOURCES 
     main.cpp
@@ -25,6 +27,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
 set(PROJECT_LIBRARIES
     Threads::Threads
     ${TORCH_LIBRARIES}
+    ${OpenCV_LIBS}
 )
 
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
