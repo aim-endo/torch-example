@@ -116,18 +116,22 @@ int main(int argc, char** argv)
         log("end normalize tensor");
 
         // forward (predict)
+        log("begin forward");
         torch::jit::IValue value = model.forward(std::vector<torch::jit::IValue>({normalized}));
+        log("end forward");
 
         // postprocess
+        log("begin postprocess");
         if (input.type == ResultType::DETECTION) {
             const std::vector<c10::IValue> elements = value.toTuple()->elements();
             torch::Tensor classification = elements[0].toTensor().squeeze();
             torch::Tensor bboxes = elements[1].toTensor().squeeze();
         }
+        log("end postprocess");
     } catch (const c10::Error& e) {
-        log(e.msg());
+        log(std::string("error = ") + typeid(e).name() + e.what() + " / " + e.msg());
     } catch (const std::exception& e) {
-        log(e.what());
+        log(std::string("error = ") + typeid(e).name() + e.what());
     }
 
     return 0;
