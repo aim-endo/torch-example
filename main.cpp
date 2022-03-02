@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -39,6 +40,28 @@ void log(const std::string& message) {
     std::time_t now = std::chrono::system_clock::to_time_t(n);
     std::tm* tm = std::localtime(&now);
     std::cout << "[" << std::put_time(tm, "%Y-%m-%d %H:%M:%S") << "] " << message << std::endl;
+}
+
+void dump(const torch::Tensor& tensor) {
+    std::cout << " >>> " << std::endl;
+    std::cout << tensor << std::endl;
+    std::cout << " >>> " << std::endl;
+}
+
+void dump(const torch::jit::IValue& value) {
+    std::cout << " >>> " << std::endl;
+    std::cout << value << std::endl;
+    std::cout << " >>> " << std::endl;
+}
+
+void save(const torch::Tensor& tensor, const std::string& filename) {
+    std::cout << "begin save tensor ... " << filename << std::endl;
+    std::stringstream stream;
+    stream << tensor;
+    std::ofstream file(filename);
+    file << stream.str();
+    file.close();
+    std::cout << "end save tensor" << std::endl;
 }
 
 /**
@@ -110,28 +133,38 @@ int main(int argc, char** argv)
         log("begin normalize tensor");
         torch::TensorOptions normalize_options(torch::kFloat32);
         const std::array<int64_t, 4> shape{1L, 3L, 1L, 1L};
-        torch::Tensor mean = torch::from_blob(static_cast<void*>(input.mean.data()), c10::ArrayRef<int64_t>(shape), normalize_options);
-        torch::Tensor std  = torch::from_blob(static_cast<void*>(input.std.data()), c10::ArrayRef<int64_t>(shape), normalize_options);
+        torch::Tensor mean = torch::from_blob(static_cast<void*>(input.mean.data()), c10::ArrayRef<int64_t>(shape), normalize_options).to(device);
+        torch::Tensor std  = torch::from_blob(static_cast<void*>(input.std.data()), c10::ArrayRef<int64_t>(shape), normalize_options).to(device);
         torch::Tensor normalized = tensor.div(255.0).sub(mean).div(std).to(c10::TensorOptions().device(device));
         log("end normalize tensor");
 
         // forward (predict)
         log("begin forward");
         torch::jit::IValue value = model.forward(std::vector<torch::jit::IValue>({normalized}));
+        // dump(value);
         log("end forward");
 
         // postprocess
         log("begin postprocess");
         if (input.type == ResultType::DETECTION) {
             const std::vector<c10::IValue> elements = value.toTuple()->elements();
+            // classification
             torch::Tensor classification = elements[0].toTensor().squeeze();
+            const std::tuple<at::Tensor,at::Tensor> vals = classification.max(1);
+            const torch::Tensor max_value = std::get<0>(vals);
+            const torch::Tensor max_index = std::get<1>(vals);
+            save(max_value, "max.txt");
+            const torch::Tensor max_ids = classification.argmax(2);
+            //save(max_ids, "argmax.txt");
+
+            // bboxes
             torch::Tensor bboxes = elements[1].toTensor().squeeze();
         }
         log("end postprocess");
     } catch (const c10::Error& e) {
-        log(std::string("error = ") + typeid(e).name() + e.what() + " / " + e.msg());
+        log(std::string("error = ") + typeid(e).name() + ": " + e.what() + " / " + e.msg());
     } catch (const std::exception& e) {
-        log(std::string("error = ") + typeid(e).name() + e.what());
+        log(std::string("error = ") + typeid(e).name() + ": " + e.what());
     }
 
     return 0;
